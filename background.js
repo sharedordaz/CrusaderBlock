@@ -1,5 +1,5 @@
 const blockedSites = [
-  "*://*.example-porn-site.com/*",
+  "*://*.masfe.org/*",
   "*://*.another-porn-site.com/*"
 ];
 
