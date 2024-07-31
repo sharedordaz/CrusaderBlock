@@ -1,6 +1,7 @@
-//import { blockedWords } from "./blockedWords.js";
-///*
 const blockedWords = [
+  "TestWord1", "TestWord2",
+  "+18",
+  "NSFW, nsfw, Nsfw",
   "PORN", "porn", "Porn",
   "THREESOME", "threesome", "Threesome",
   "TRIO", "trio", "Trio",
@@ -13,10 +14,7 @@ const blockedWords = [
   "HARDCORE", "hardcore", "Hardcore",
   "LESBIAN", "lesbian", "Lesbian",
   "GAY", "gay", "Gay",
-  "STRAIGHT", "straight", "Straight",
-  "BISEXUAL", "bisexual", "Bisexual",
   "INTERRACIAL", "interracial", "Interracial",
-  "TEEN", "teen", "Teen",
   "AMATEUR", "amateur", "Amateur",
   "MATURE", "mature", "Mature",
   "COUPLE", "couple", "Couple",
@@ -27,6 +25,10 @@ const blockedWords = [
   "EXPLICIT", "explicit", "Explicit",
   "NAKED", "naked", "Naked",
   "NIPPLE", "nipple", "Nipple",
+  "BOOBS", "boobs", "Boobs",
+  "TITS", "tits", "Tits",
+  "PUSSY", "pussy", "Pussy",
+  "BITCH", "bitch", "Bitch",
   "PENETRATION", "penetration", "Penetration",
   "SEDUCTION", "seduction", "Seduction",
   "VOYEUR", "voyeur", "Voyeur",
@@ -41,19 +43,5 @@ const blockedWords = [
   "AROUSAL", "arousal", "Arousal",
   "FOREPLAY", "foreplay", "Foreplay",
   "CLIMAX", "climax", "Climax",
-]
-//*/
-
-const asterisks = "*****";
-const asciiBrick = "█████";
-const deusVult = "✠ ᴰᵉᵘˢ ⱽᵘˡᵗᵎ ✠";
-
-const censorship = asciiBrick;
-
-console.log("CruzaderBlock Working");
-
-// Replaces blocked words with asterisks
-document.body.innerHTML = document.body.innerHTML.replace(
-  new RegExp(blockedWords.join("|"), "gi"),
-  censorship
-);
+];
+export { blockedWords };
