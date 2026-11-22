@@ -1,13 +1,15 @@
 (() => {
   const browserApi = globalThis.browser || globalThis.chrome;
   const storage = browserApi.storage.local;
-  const DAY_MS = 24 * 60 * 60 * 1000;
+  const DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
   const DEBUG_COOLDOWN_MS = 10 * 1000; // 10 seconds
 
   // true = use cooldowns; false = disable cooldowns completely
   const COOLDOWN_ENABLED = true;
   // true = 10 seconds (debug); false = 24 hours (normal)
   const DEBUG_COOLDOWN = true;
+
+  const SHUTDOWN_COOLDOWN = true; // true = dev-only: allows clearing cooldowns from popup console with resetCooldowns()
 
   const COOLDOWN_MS = DEBUG_COOLDOWN ? DEBUG_COOLDOWN_MS : DAY_MS;
 
@@ -169,6 +171,17 @@
   }
 
   document.getElementById("customDomains").addEventListener("change", saveCustomDomains);
+
+  // Dev-only: lets you run resetCooldowns() from the popup console
+  if (SHUTDOWN_COOLDOWN) {
+    globalThis.resetCooldowns = () => {
+      storage.remove(["cooldowns", "pendingCustomDomains"], () => {
+        browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+        load();
+        console.log("Cooldowns cleared!");
+      });
+    };
+  }
 
   load();
   setInterval(load, DEBUG_COOLDOWN ? 1000 : 60000);
