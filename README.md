@@ -2,7 +2,16 @@
 
 <img src="Images/crusader-logo.png" alt="CrusaderBlock" width="200"/>
 
-CrusaderBlock is an extension made to block porn sites, words that may cause a relapse, and includes a clean days counter. 
+-Blockea una lista de dominios en un js aparte
 
-This extension is completely free, open source, easy to use, and attractive.
+-Detecta palabras clave listadas en un js y las cambia por el ascii brick
+
+-Cierra una pestaña si detecta una palabra clave blockeada
+
+-Tiene una pequeña ventana que tiene una imagen y maneja parametros de que quieres blockear (tarda 24 horas en desactivarse)
+
+    Puede bloquear redes sociales.
+    Puede bloquear youtube
+    Puede bloquear sitios de apuestas
+
 

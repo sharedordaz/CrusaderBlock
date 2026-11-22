@@ -44,4 +44,3 @@ const blockedWords = [
   "FOREPLAY", "foreplay", "Foreplay",
   "CLIMAX", "climax", "Climax",
 ];
-export { blockedWords };

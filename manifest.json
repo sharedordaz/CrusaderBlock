@@ -1,7 +1,7 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "CrusaderBlock",
-  "version": "1.0",
+  "version": "2.0",
   "description": "An extension to block porn sites, words that may cause a relapse, and a clean days counter.",
   "icons": {
     "48": "Images/logo.png"
@@ -13,17 +13,16 @@
     "<all_urls>"
   ],
   "background": {
-    
     "scripts": ["background.js"]
   },
-  "action": {
+  "browser_action": {
     "default_popup": "popup.html",
     "default_icon": "Images/logo.png"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content_script.js"]
+      "js": ["blockedWords.js", "content_script.js"]
     }
   ]
 }
