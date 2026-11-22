@@ -16,32 +16,21 @@
     </section>
 
     <div class="options">
-      <label class="option">
-        <span>Social networks</span>
-        <input type="checkbox" id="social">
-      </label>
-      <label class="option">
-        <span>YouTube</span>
-        <input type="checkbox" id="youtube">
-      </label>
-      <label class="option">
-        <span>Gambling</span>
-        <input type="checkbox" id="gambling">
-      </label>
-      <label class="option">
-        <span>Keyword censor</span>
-        <input type="checkbox" id="keywordCensor">
-      </label>
-      <label class="option">
-        <span>Close blocked tabs</span>
-        <input type="checkbox" id="closeTabs">
-      </label>
+      <label class="option"><span>Social networks</span><input type="checkbox" id="social"></label>
+      <label class="option"><span>YouTube</span><input type="checkbox" id="youtube"></label>
+      <label class="option"><span>Gambling</span><input type="checkbox" id="gambling"></label>
+      <label class="option"><span>Adult content</span><input type="checkbox" id="adult"></label>
+      <label class="option"><span>Video platforms</span><input type="checkbox" id="videoPlatforms"></label>
+      <label class="option"><span>Streaming platforms</span><input type="checkbox" id="streamingPlatforms"></label>
+      <label class="option"><span>Keyword censor</span><input type="checkbox" id="keywordCensor"></label>
+      <label class="option"><span>Close blocked tabs</span><input type="checkbox" id="closeTabs"></label>
     </div>
 
     <details>
       <summary>Custom domains</summary>
-      <textarea id="customDomains" rows="3" placeholder="example.com&#10;another.example"></textarea>
-    <!--<button id="saveCustomDomainsBtn" type="button">Guardar dominios</button>-->
+      <textarea id="customDomains" rows="3"
+                aria-label="Custom domains, one per line"
+                placeholder="example.com&#10;another.example"></textarea>
       <label class="option custom-enable">
         <span>Block custom domains</span>
         <input type="checkbox" id="custom">
@@ -50,9 +39,10 @@
 
     <p class="note">Turning protection off starts a 24-hour cooldown.</p>
   </main>
-  <script src="../lists/domains.js"></script>
-  <script src="../lists/keywords.js"></script>
-  <script src="../lists/controls.js"></script>
-  <script src="popup.js"></script>
+
+  <script src="../lists/domains.js" defer></script>
+  <script src="../lists/keywords.js" defer></script>
+  <script src="../lists/controls.js" defer></script>
+  <script src="popup.js" defer></script>
 </body>
 </html>

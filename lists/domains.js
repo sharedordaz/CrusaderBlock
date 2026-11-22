@@ -14,6 +14,28 @@ const DOMAIN_GROUPS = {
     "fanduel.com", "www.fanduel.com", "pokerstars.com", "www.pokerstars.com",
     "888casino.com", "www.888casino.com", "stake.com", "www.stake.com"
   ],
+
+  adult: [
+  "pornhub.com",
+  "xvideos.com",
+  "xnxx.com",
+  "onlyfans.com"
+  // ...los que quieras bloquear
+  ],
+  videoPlatforms: [
+  "tiktok.com",
+  "vimeo.com",
+  "dailymotion.com",
+  "rumble.com"
+  ],
+  streamingPlatforms: [
+  "netflix.com",
+  "twitch.tv",
+  "kick.com",
+  "primevideo.com",
+  "disneyplus.com",
+  "max.com"
+  ],
   custom: []
 };
 
