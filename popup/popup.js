@@ -2,16 +2,20 @@
   const browserApi = globalThis.browser || globalThis.chrome;
   const storage = browserApi.storage.local;
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const DEBUG_COOLDOWN_MS = 10 * 1000; // 10 segundos
 
-  // Set to false for debugging: settings and custom domains change immediately.
-  // Set to true for the normal 24-hour cooldown behavior.
-  const COOLDOWN_ENABLED = false;
+  // true = usa los cooldowns; false = desactiva los cooldowns por completo
+  const COOLDOWN_ENABLED = true;
+  // true = 10 segundos (debug); false = 24 horas (normal)
+  const DEBUG_COOLDOWN = true;
+
+  const COOLDOWN_MS = DEBUG_COOLDOWN ? DEBUG_COOLDOWN_MS : DAY_MS;
 
   const elements = Object.fromEntries(
     Object.keys(CONTROLS).map((id) => [id, document.getElementById(id)])
   );
 
-  /** Loads settings and disables options that are in their 24-hour cooldown. */
+  /** Loads settings and disables options that are in their cooldown. */
   function load() {
     storage.get(["domainSettings", "cooldowns", "customDomains", "keywordSettings"], (saved) => {
       let cooldowns = { ...(saved.cooldowns || {}) };
@@ -45,7 +49,7 @@
     });
   }
 
-  /** Normalizes and saves custom domains, then optionally starts a 24-hour cooldown. */
+  /** Normalizes and saves custom domains, then optionally starts a cooldown. */
   function saveCustomDomains() {
     storage.get(["customDomains", "cooldowns"], (saved) => {
       const cooldowns = { ...(saved.cooldowns || {}) };
@@ -62,7 +66,7 @@
 
       if (JSON.stringify(customDomains) === JSON.stringify(saved.customDomains || [])) return;
 
-      if (COOLDOWN_ENABLED) cooldowns.custom = Date.now() + DAY_MS;
+      if (COOLDOWN_ENABLED) cooldowns.custom = Date.now() + COOLDOWN_MS;
       storage.set({ customDomains, cooldowns }, () => {
         browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
         load();
@@ -70,7 +74,7 @@
     });
   }
 
-  /** Updates any setting and optionally locks only that setting for 24 hours. */
+  /** Updates any setting and optionally locks only that setting for COOLDOWN_MS. */
   function setSetting(id, enabled) {
     const cfg = CONTROLS[id];
 
@@ -80,7 +84,7 @@
 
       const groupData = { ...(saved[cfg.group] || {}) };
       groupData[cfg.key] = enabled;
-      if (COOLDOWN_ENABLED) cooldowns[id] = Date.now() + DAY_MS;
+      if (COOLDOWN_ENABLED) cooldowns[id] = Date.now() + COOLDOWN_MS;
 
       storage.set({ [cfg.group]: groupData, cooldowns }, () => {
         browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
@@ -89,10 +93,10 @@
     });
   }
 
-  /** Finds the earliest cooldown and displays its remaining hours and minutes. */
+  /** Finds the earliest cooldown and displays its remaining time. */
   function updateCountdown(cooldowns) {
+    const text = document.getElementById("unlockText");
     if (!COOLDOWN_ENABLED) {
-      const text = document.getElementById("unlockText");
       text.textContent = "";
       return;
     }
@@ -101,7 +105,6 @@
       .filter(([, until]) => until > Date.now())
       .sort((a, b) => a[1] - b[1]);
 
-    const text = document.getElementById("unlockText");
     if (!active.length) {
       text.textContent = "";
       return;
@@ -110,7 +113,9 @@
     const remaining = active[0][1] - Date.now();
     const hours = Math.floor(remaining / 3600000);
     const minutes = Math.floor((remaining % 3600000) / 60000);
-    text.textContent = `${hours}h ${minutes}m`;
+    const seconds = Math.ceil((remaining % 60000) / 1000);
+
+    text.textContent = remaining < 60000 ? `${seconds}s` : `${hours}h ${minutes}m`;
   }
 
   for (const id of Object.keys(CONTROLS)) {
@@ -120,7 +125,5 @@
   document.getElementById("customDomains").addEventListener("change", saveCustomDomains);
 
   load();
-  setInterval(load, 60000);
+  setInterval(load, DEBUG_COOLDOWN ? 1000 : 60000);
 })();
-
-storage.remove("cooldowns", load);
