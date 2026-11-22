@@ -1,7 +1,6 @@
 (() => {
   const browserApi = globalThis.browser || globalThis.chrome;
   const storage = browserApi.storage.local;
-  const DAY_MS = 24 * 60 * 60 * 1000;
 
   let activeDomains = new Set();
 
@@ -28,38 +27,66 @@
     return {};
   }
 
-  /** Loads enabled domain groups, removes expired cooldowns, and rebuilds the active domain set. */
+  /** Loads enabled domain groups, applies expired cooldowns, and rebuilds the active domain set. */
   async function refreshDomains() {
-    const saved = await getStoredData(["domainSettings", "cooldowns", "customDomains"]);
-    const domainSettings = saved.domainSettings || {};
-    const cooldowns = saved.cooldowns || {};
-    const now = Date.now();
+    const saved = await getStoredData([
+      "domainSettings",
+      "keywordSettings",
+      "cooldowns",
+      "customDomains",
+      "pendingCustomDomains"
+    ]);
 
-    const changedCooldowns = { ...cooldowns };
-    for (const key of ["social", "youtube", "gambling", "custom", "keywordCensor", "closeTabs"]) {
-      if (cooldowns[key] && cooldowns[key] <= now) {
-        delete changedCooldowns[key];
+    const domainSettings = { ...(saved.domainSettings || {}) };
+    const keywordSettings = { ...(saved.keywordSettings || {}) };
+    let customDomains = saved.customDomains || [];
+    const cooldowns = { ...(saved.cooldowns || {}) };
+    const now = Date.now();
+    let needsSave = false;
+    let clearPendingDomains = false;
+
+    for (const id of Object.keys(cooldowns)) {
+      if (cooldowns[id] <= now) {
+        if (id === "customDomains" && Array.isArray(saved.pendingCustomDomains)) {
+          customDomains = saved.pendingCustomDomains;
+          clearPendingDomains = true;
+        } else if (id === "keywordCensor") {
+          keywordSettings.censor = false;
+        } else if (id === "closeTabs") {
+          keywordSettings.closeTab = false;
+        } else {
+          domainSettings[id] = false;
+        }
+        delete cooldowns[id];
+        needsSave = true;
       }
     }
-    if (JSON.stringify(changedCooldowns) !== JSON.stringify(cooldowns)) {
-      storage.set({ cooldowns: changedCooldowns, domainSettings });
+
+    if (needsSave) {
+      storage.set({ domainSettings, keywordSettings, customDomains, cooldowns }, () => {
+        if (clearPendingDomains) storage.remove("pendingCustomDomains");
+      });
     }
 
     const domains = new Set();
-    for (const key of ["social", "youtube", "gambling"]) {
-      if (domainSettings[key]) {
-        for (const domain of DOMAIN_GROUPS[key] || []) domains.add(normalizeHost(domain));
+    for (const key of Object.keys(DOMAIN_GROUPS)) {
+      if (key !== "custom" && domainSettings[key]) {
+        for (const domain of DOMAIN_GROUPS[key] || []) {
+          domains.add(normalizeHost(domain));
+        }
       }
     }
 
     if (domainSettings.custom) {
-      for (const domain of saved.customDomains || []) domains.add(normalizeHost(domain));
+      for (const domain of customDomains) {
+        domains.add(normalizeHost(domain));
+      }
     }
 
     activeDomains = domains;
   }
 
-  // Cancel navigation requests whose hostname belongs to an enabled blocked domain.
+  // Cancel navigation requests and close tabs whose hostname belongs to a blocked domain.
   if (browserApi.webRequest?.onBeforeRequest) {
     browserApi.webRequest.onBeforeRequest.addListener(
       (details) => {
@@ -71,13 +98,38 @@
         }
 
         for (const domain of activeDomains) {
-          if (matchesDomain(hostname, domain)) return { cancel: true };
+          if (matchesDomain(hostname, domain)) {
+            if (details.tabId >= 0) browserApi.tabs.remove(details.tabId);
+            return { cancel: true };
+          }
         }
         return { cancel: false };
       },
       { urls: ["<all_urls>"], types: ["main_frame", "sub_frame"] },
       ["blocking"]
     );
+  }
+
+  // Fallback for cached pages / Service Workers (like Facebook) or already-open tabs.
+  if (browserApi.tabs?.onUpdated) {
+    browserApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      const url = changeInfo.url || tab?.url;
+      if (!url) return;
+
+      let hostname;
+      try {
+        hostname = new URL(url).hostname;
+      } catch {
+        return;
+      }
+
+      for (const domain of activeDomains) {
+        if (matchesDomain(hostname, domain)) {
+          browserApi.tabs.remove(tabId);
+          return;
+        }
+      }
+    });
   }
 
   // Handle popup setting updates and requests from content scripts to close tabs.
