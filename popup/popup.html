@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cruzader Block</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="panel">
+    <img class="banner" src="../assets/banner.png" alt="Cruzader Block">
+
+    <section class="status" aria-live="polite">
+      <strong id="statusText">Protection settings</strong>
+      <span id="unlockText"></span>
+    </section>
+
+    <div class="options">
+      <label class="option">
+        <span>Social networks</span>
+        <input type="checkbox" id="social">
+      </label>
+      <label class="option">
+        <span>YouTube</span>
+        <input type="checkbox" id="youtube">
+      </label>
+      <label class="option">
+        <span>Gambling</span>
+        <input type="checkbox" id="gambling">
+      </label>
+      <label class="option">
+        <span>Keyword censor</span>
+        <input type="checkbox" id="keywordCensor">
+      </label>
+      <label class="option">
+        <span>Close blocked tabs</span>
+        <input type="checkbox" id="closeTabs">
+      </label>
+    </div>
+
+    <details>
+      <summary>Custom domains</summary>
+      <textarea id="customDomains" rows="3" placeholder="example.com&#10;another.example"></textarea>
+      <label class="option custom-enable">
+        <span>Block custom domains</span>
+        <input type="checkbox" id="custom">
+      </label>
+    </details>
+
+    <p class="note">Turning protection off starts a 24-hour cooldown.</p>
+  </main>
+  <script src="../lists/domains.js"></script>
+  <script src="../lists/keywords.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

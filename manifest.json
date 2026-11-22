@@ -1,28 +1,46 @@
 {
-  "manifest_version": 2,
-  "name": "CrusaderBlock",
-  "version": "2.0",
-  "description": "An extension to block porn sites, words that may cause a relapse, and a clean days counter.",
+  "manifest_version": 3,
+  "name": "Cruzader Block",
+  "version": "1.0.0",
+  "description": "Bloqueador de dominios y palabras clave con censura ASCII y retraso de 24h.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cruzader-block@cleanreset.local",
+      "strict_min_version": "109.0"
+    }
+  },
   "icons": {
-    "48": "Images/logo.png"
+    "48": "assets/logo.png"
   },
   "permissions": [
-    "webRequest",
-    "webRequestBlocking",
     "storage",
+    "tabs",
+    "alarms",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+  "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"]
-  },
-  "browser_action": {
-    "default_popup": "popup.html",
-    "default_icon": "Images/logo.png"
+    "scripts": [
+      "lists/domains.js",
+      "lists/keywords.js",
+      "background/background.js"
+    ]
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["blockedWords.js", "content_script.js"]
+      "js": [
+        "lists/keywords.js",
+        "content/censor.js"
+      ],
+      "run_at": "document_idle"
     }
-  ]
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Cruzader Block"
+  }
 }
