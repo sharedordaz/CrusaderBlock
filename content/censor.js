@@ -17,7 +17,10 @@
         .concat(Array.isArray(settings.censorCustom) ? settings.censorCustom : []);
       closeWords = (KEYWORDS.closeTab || []).filter(() => settings.closeTab !== false)
         .concat(Array.isArray(settings.closeTabCustom) ? settings.closeTabCustom : []);
-      censorDocument(document.body);
+
+      if (!checkAndCloseTab()) {
+        censorText(document.body);
+      }
     });
   }
 
@@ -31,21 +34,26 @@
     });
   }
 
-  /** Closes tabs on blocked phrases and replaces matching text nodes with ASCII bricks. */
-  function censorDocument(root) {
-    if (!root) return;
+  /** Checks the page title and body for blocked phrases and closes the tab if matched. */
+  function checkAndCloseTab() {
+    if (!closeWords.length) return false;
 
-    if (closeWords.length) {
-      if (containsBlockedPhrase(document.title, closeWords)) {
-        browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: document.title });
-        return;
-      }
-
-      if (containsBlockedPhrase(document.body?.innerText || "", closeWords)) {
-        browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: "blocked keyword" });
-        return;
-      }
+    if (containsBlockedPhrase(document.title, closeWords)) {
+      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: document.title });
+      return true;
     }
+
+    if (containsBlockedPhrase(document.body?.innerText || "", closeWords)) {
+      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: "blocked keyword" });
+      return true;
+    }
+
+    return false;
+  }
+
+  /** Replaces matching text nodes inside root with ASCII bricks. */
+  function censorText(root) {
+    if (!root) return;
 
     const censorRegex = censorWords
       .map((word) => escapeRegex(String(word).trim()))
@@ -82,17 +90,19 @@
   });
 
   const observer = new MutationObserver((mutations) => {
+    if (checkAndCloseTab()) return;
+
     for (const mutation of mutations) {
       if (mutation.type === "characterData") {
-        censorDocument(mutation.target.parentElement || mutation.target);
+        censorText(mutation.target.parentElement || mutation.target);
         continue;
       }
 
       for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.TEXT_NODE) {
-          censorDocument(node.parentElement || node);
+          censorText(node.parentElement || node);
         } else if (node.nodeType === Node.ELEMENT_NODE) {
-          censorDocument(node);
+          censorText(node);
         }
       }
     }

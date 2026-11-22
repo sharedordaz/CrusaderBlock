@@ -3,65 +3,100 @@
   const storage = browserApi.storage.local;
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const ids = ["social", "youtube", "gambling", "custom", "keywordCensor", "closeTabs"];
-  const elements = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+  // Set to false for debugging: settings and custom domains change immediately.
+  // Set to true for the normal 24-hour cooldown behavior.
+  const COOLDOWN_ENABLED = false;
 
-  /** Loads saved protection settings and updates every popup control and cooldown label. */
+  const elements = Object.fromEntries(
+    Object.keys(CONTROLS).map((id) => [id, document.getElementById(id)])
+  );
+
+  /** Loads settings and disables options that are in their 24-hour cooldown. */
   function load() {
     storage.get(["domainSettings", "cooldowns", "customDomains", "keywordSettings"], (saved) => {
-      const domainSettings = saved.domainSettings || {};
-      const cooldowns = saved.cooldowns || {};
-      const keywordSettings = saved.keywordSettings || {};
+      let cooldowns = { ...(saved.cooldowns || {}) };
+      const now = Date.now();
 
-      for (const id of ["social", "youtube", "gambling", "custom"]) {
-        const lockedUntil = cooldowns[id] || 0;
-        elements[id].checked = !!domainSettings[id] || lockedUntil > Date.now();
-        elements[id].disabled = lockedUntil > Date.now();
+      if (!COOLDOWN_ENABLED) {
+        cooldowns = {};
+        storage.remove("cooldowns");
+      } else {
+        for (const id of Object.keys(cooldowns)) {
+          if (cooldowns[id] <= now) delete cooldowns[id];
+        }
+        storage.set({ cooldowns });
       }
 
-      elements.keywordCensor.checked = keywordSettings.censor !== false;
-      elements.closeTabs.checked = keywordSettings.closeTab !== false;
-      document.getElementById("customDomains").value = (saved.customDomains || []).join("\n");
+      for (const [id, cfg] of Object.entries(CONTROLS)) {
+        const groupData = saved[cfg.group] || {};
+        const isEnabled = cfg.defaultOn
+          ? groupData[cfg.key] !== false
+          : !!groupData[cfg.key];
+
+        elements[id].checked = isEnabled;
+        elements[id].disabled = COOLDOWN_ENABLED && (cooldowns[id] || 0) > now;
+      }
+
+      const customDomains = document.getElementById("customDomains");
+      customDomains.value = (saved.customDomains || []).join("\n");
+      customDomains.disabled = COOLDOWN_ENABLED && (cooldowns.custom || 0) > now;
+
       updateCountdown(cooldowns);
     });
   }
 
-  /** Normalizes and saves the custom domain list entered in the popup. */
+  /** Normalizes and saves custom domains, then optionally starts a 24-hour cooldown. */
   function saveCustomDomains() {
-    const custom = document.getElementById("customDomains").value
-      .split(/\n|,/)
-      .map((value) => value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0])
-      .filter(Boolean)
-      .filter((value, index, array) => array.indexOf(value) === index);
-
-    storage.set({ customDomains: custom }, () => {
-      browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
-    });
-  }
-
-  /** Enables or disables a domain group and starts or removes its 24-hour cooldown. */
-  function setDomain(id, enabled) {
-    storage.get(["domainSettings", "cooldowns"], (saved) => {
-      const domainSettings = { ...(saved.domainSettings || {}) };
+    storage.get(["customDomains", "cooldowns"], (saved) => {
       const cooldowns = { ...(saved.cooldowns || {}) };
+      if (COOLDOWN_ENABLED && (cooldowns.custom || 0) > Date.now()) return;
 
-      if (enabled) {
-        domainSettings[id] = true;
-        delete cooldowns[id];
-      } else {
-        domainSettings[id] = false;
-        cooldowns[id] = Date.now() + DAY_MS;
-      }
+      const customDomains = document.getElementById("customDomains").value
+        .split(/\n|,/)
+        .map((value) => value.trim().toLowerCase()
+          .replace(/^https?:\/\//, "")
+          .replace(/^www\./, "")
+          .split("/")[0])
+        .filter(Boolean)
+        .filter((value, index, array) => array.indexOf(value) === index);
 
-      storage.set({ domainSettings, cooldowns }, () => {
+      if (JSON.stringify(customDomains) === JSON.stringify(saved.customDomains || [])) return;
+
+      if (COOLDOWN_ENABLED) cooldowns.custom = Date.now() + DAY_MS;
+      storage.set({ customDomains, cooldowns }, () => {
         browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
         load();
       });
     });
   }
 
-  /** Finds the earliest cooldown and renders its remaining hours and minutes. */
+  /** Updates any setting and optionally locks only that setting for 24 hours. */
+  function setSetting(id, enabled) {
+    const cfg = CONTROLS[id];
+
+    storage.get([cfg.group, "cooldowns"], (saved) => {
+      const cooldowns = { ...(saved.cooldowns || {}) };
+      if (COOLDOWN_ENABLED && (cooldowns[id] || 0) > Date.now()) return;
+
+      const groupData = { ...(saved[cfg.group] || {}) };
+      groupData[cfg.key] = enabled;
+      if (COOLDOWN_ENABLED) cooldowns[id] = Date.now() + DAY_MS;
+
+      storage.set({ [cfg.group]: groupData, cooldowns }, () => {
+        browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+        load();
+      });
+    });
+  }
+
+  /** Finds the earliest cooldown and displays its remaining hours and minutes. */
   function updateCountdown(cooldowns) {
+    if (!COOLDOWN_ENABLED) {
+      const text = document.getElementById("unlockText");
+      text.textContent = "";
+      return;
+    }
+
     const active = Object.entries(cooldowns)
       .filter(([, until]) => until > Date.now())
       .sort((a, b) => a[1] - b[1]);
@@ -78,28 +113,14 @@
     text.textContent = `${hours}h ${minutes}m`;
   }
 
-  for (const id of ["social", "youtube", "gambling", "custom"]) {
-    elements[id].addEventListener("change", () => setDomain(id, elements[id].checked));
+  for (const id of Object.keys(CONTROLS)) {
+    elements[id].addEventListener("change", () => setSetting(id, elements[id].checked));
   }
-
-  elements.keywordCensor.addEventListener("change", () => {
-    storage.get(["keywordSettings"], (saved) => {
-      const keywordSettings = { ...(saved.keywordSettings || {}) };
-      keywordSettings.censor = elements.keywordCensor.checked;
-      storage.set({ keywordSettings });
-    });
-  });
-
-  elements.closeTabs.addEventListener("change", () => {
-    storage.get(["keywordSettings"], (saved) => {
-      const keywordSettings = { ...(saved.keywordSettings || {}) };
-      keywordSettings.closeTab = elements.closeTabs.checked;
-      storage.set({ keywordSettings });
-    });
-  });
 
   document.getElementById("customDomains").addEventListener("change", saveCustomDomains);
 
   load();
   setInterval(load, 60000);
 })();
+
+storage.remove("cooldowns", load);

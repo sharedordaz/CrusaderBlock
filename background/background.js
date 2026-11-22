@@ -36,10 +36,9 @@
     const now = Date.now();
 
     const changedCooldowns = { ...cooldowns };
-    for (const key of ["social", "youtube", "gambling", "custom"]) {
+    for (const key of ["social", "youtube", "gambling", "custom", "keywordCensor", "closeTabs"]) {
       if (cooldowns[key] && cooldowns[key] <= now) {
         delete changedCooldowns[key];
-        delete domainSettings[key];
       }
     }
     if (JSON.stringify(changedCooldowns) !== JSON.stringify(cooldowns)) {
