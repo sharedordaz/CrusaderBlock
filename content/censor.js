@@ -13,9 +13,9 @@
     if (!browserApi.storage?.local) return;
     browserApi.storage.local.get(["keywordSettings"], (result) => {
       const settings = result.keywordSettings || {};
-      censorWords = (KEYWORDS.censor || []).filter((_, index) => settings.censor !== false)
+      censorWords = (KEYWORDS.censor || []).filter(() => settings.censor !== false)
         .concat(Array.isArray(settings.censorCustom) ? settings.censorCustom : []);
-      closeWords = (KEYWORDS.closeTab || []).filter((_, index) => settings.closeTab !== false)
+      closeWords = (KEYWORDS.closeTab || []).filter(() => settings.closeTab !== false)
         .concat(Array.isArray(settings.closeTabCustom) ? settings.closeTabCustom : []);
       censorDocument(document.body);
     });
@@ -23,10 +23,10 @@
 
   /** Reports whether a text value contains at least one configured blocked phrase. */
   function containsBlockedPhrase(text, words) {
-    if (!text) return false;
+    if (!text || !words.length) return false;
     const haystack = text.toLocaleLowerCase();
     return words.some((word) => {
-      const normalized = String(word).trim().toLocaleLower();
+      const normalized = String(word).trim().toLocaleLowerCase();
       return normalized && haystack.includes(normalized);
     });
   }
@@ -35,17 +35,16 @@
   function censorDocument(root) {
     if (!root) return;
 
-    if (containsBlockedPhrase(document.title, closeWords)) {
-      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: document.title });
-    }
+    if (closeWords.length) {
+      if (containsBlockedPhrase(document.title, closeWords)) {
+        browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: document.title });
+        return;
+      }
 
-    const closeRegex = closeWords
-      .map((word) => escapeRegex(String(word).trim()))
-      .filter(Boolean)
-      .join("|");
-
-    if (closeRegex && containsBlockedPhrase(document.body?.innerText || "", closeWords)) {
-      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: "blocked keyword" });
+      if (containsBlockedPhrase(document.body?.innerText || "", closeWords)) {
+        browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: "blocked keyword" });
+        return;
+      }
     }
 
     const censorRegex = censorWords
@@ -84,6 +83,11 @@
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
+      if (mutation.type === "characterData") {
+        censorDocument(mutation.target.parentElement || mutation.target);
+        continue;
+      }
+
       for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           censorDocument(node.parentElement || node);
