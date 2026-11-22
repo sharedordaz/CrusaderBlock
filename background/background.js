@@ -3,6 +3,7 @@
   const storage = browserApi.storage.local;
 
   let activeDomains = new Set();
+  let lastPopupTime = 0;
 
   /** Removes protocol and subdomain prefixes so domains can be compared consistently. */
   function normalizeHost(hostname) {
@@ -25,6 +26,22 @@
       });
     }
     return {};
+  }
+
+  /** Opens a small popup window showing the protection screen. */
+  function showProtectedPopup() {
+    const now = Date.now();
+    if (now - lastPopupTime < 2000) return;
+    lastPopupTime = now;
+
+    if (browserApi.windows?.create) {
+      browserApi.windows.create({
+        url: browserApi.runtime.getURL("protected/protected.html"),
+        type: "popup",
+        width: 380,
+        height: 480
+      });
+    }
   }
 
   /** Loads enabled domain groups, applies expired cooldowns, and rebuilds the active domain set. */
@@ -100,6 +117,7 @@
         for (const domain of activeDomains) {
           if (matchesDomain(hostname, domain)) {
             if (details.tabId >= 0) browserApi.tabs.remove(details.tabId);
+            showProtectedPopup();
             return { cancel: true };
           }
         }
@@ -126,6 +144,7 @@
       for (const domain of activeDomains) {
         if (matchesDomain(hostname, domain)) {
           browserApi.tabs.remove(tabId);
+          showProtectedPopup();
           return;
         }
       }
@@ -141,6 +160,7 @@
 
     if (message?.type === "CLOSE_TAB" && sender.tab?.id !== undefined) {
       browserApi.tabs.remove(sender.tab.id);
+      showProtectedPopup();
     }
   });
 
