@@ -2,6 +2,13 @@
   const browserApi = globalThis.browser || globalThis.chrome;
   if (!browserApi?.runtime) return;
 
+  try {
+    const protectedUrl = browserApi.runtime.getURL("protected/protected.html");
+    if (window.location.href.startsWith(protectedUrl)) return;
+  } catch {
+    // Continue normal keyword processing if the protected URL cannot be detected.
+  }
+
   let censorWords = [];
   let closeWords = [];
 
