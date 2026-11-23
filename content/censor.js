@@ -34,17 +34,29 @@
     });
   }
 
+  /** Finds the exact configured keyword matched in text. */
+  function findBlockedPhrase(text, words) {
+    if (!text) return "";
+    const haystack = text.toLocaleLowerCase();
+    return words.find((word) => {
+      const normalized = String(word).trim().toLocaleLowerCase();
+      return normalized && haystack.includes(normalized);
+    }) || "";
+  }
+
   /** Checks the page title and body for blocked phrases and closes the tab if matched. */
   function checkAndCloseTab() {
     if (!closeWords.length) return false;
 
-    if (containsBlockedPhrase(document.title, closeWords)) {
-      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: document.title });
+    const matchedTitle = findBlockedPhrase(document.title, closeWords);
+    if (matchedTitle) {
+      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: matchedTitle });
       return true;
     }
 
-    if (containsBlockedPhrase(document.body?.innerText || "", closeWords)) {
-      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: "blocked keyword" });
+    const matchedBody = findBlockedPhrase(document.body?.innerText || "", closeWords);
+    if (matchedBody) {
+      browserApi.runtime.sendMessage({ type: "CLOSE_TAB", reason: matchedBody });
       return true;
     }
 
