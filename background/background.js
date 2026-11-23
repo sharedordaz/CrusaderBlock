@@ -4,6 +4,8 @@
 
   let activeDomains = new Set();
   let lastPopupTime = 0;
+  let adultBlocklistDomains = new Set();
+  let adultBlocklistLoaded = false;
 
   /** Removes protocol and subdomain prefixes so domains can be compared consistently. */
   function normalizeHost(hostname) {
@@ -95,6 +97,11 @@
       }
     }
 
+    if (domainSettings.adult) {
+      const adultDomains = await loadAdultBlocklist();
+      for (const domain of adultDomains) domains.add(domain);
+    }
+
     if (domainSettings.custom) {
       for (const domain of customDomains) {
         domains.add(normalizeHost(domain));
@@ -102,6 +109,30 @@
     }
 
     activeDomains = domains;
+  }
+
+  /** Loads plain-hostname entries from the packaged adult blocklist once. */
+  async function loadAdultBlocklist() {
+    if (adultBlocklistLoaded) return adultBlocklistDomains;
+
+    try {
+      const response = await fetch(browserApi.runtime.getURL("assets/adult-blocklist.txt"));
+      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status}`);
+
+      const text = await response.text();
+      adultBlocklistDomains = new Set(
+        text.split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
+          .map((line) => normalizeHost(line.replace(/^[a-z]+:\/\//i, "").split("/")[0]))
+          .filter(Boolean)
+      );
+      adultBlocklistLoaded = true;
+    } catch (error) {
+      console.error("Could not load adult blocklist:", error);
+    }
+
+    return adultBlocklistDomains;
   }
 
   // Cancel navigation requests and close tabs whose hostname belongs to a blocked domain.
@@ -117,6 +148,7 @@
 
         for (const domain of activeDomains) {
           if (matchesDomain(hostname, domain)) {
+            //The actual canceler of the request
             if (details.tabId >= 0) browserApi.tabs.remove(details.tabId);
             showProtectedPopup("page", hostname);
             return { cancel: true };
@@ -144,6 +176,7 @@
 
       for (const domain of activeDomains) {
         if (matchesDomain(hostname, domain)) {
+          //The actual canceler of the request
           browserApi.tabs.remove(tabId);
           showProtectedPopup("page", hostname);
           return;
