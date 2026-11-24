@@ -110,3 +110,21 @@ textarea {
   font-size: 10px;
   text-align: center;
 }
+
+.donate-footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #2b313e;
+  text-align: center;
+}
+
+.donate-footer a {
+  color: #f59e0b;
+  font-size: 0.85rem;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.donate-footer a:hover {
+  text-decoration: underline;
+}
