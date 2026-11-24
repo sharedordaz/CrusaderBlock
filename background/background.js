@@ -1,3 +1,7 @@
+if (typeof importScripts === "function") {
+  importScripts("../lists/domains.js", "../lists/keywords.js");
+}
+
 (() => {
   const browserApi = globalThis.browser || globalThis.chrome;
   const storage = browserApi.storage.local;
@@ -6,6 +10,7 @@
   let lastPopupTime = 0;
   let adultBlocklistDomains = new Set();
   let adultBlocklistLoaded = false;
+  let readyPromise = null;
 
   /** Removes protocol and subdomain prefixes so domains can be compared consistently. */
   function normalizeHost(hostname) {
@@ -45,6 +50,30 @@
         height: 480
       });
     }
+  }
+
+  /** Loads plain-hostname entries from the packaged adult blocklist once. */
+  async function loadAdultBlocklist() {
+    if (adultBlocklistLoaded) return adultBlocklistDomains;
+
+    try {
+      const response = await fetch(browserApi.runtime.getURL("assets/adult-blocklist.txt"));
+      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status}`);
+
+      const text = await response.text();
+      adultBlocklistDomains = new Set(
+        text.split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
+          .map((line) => normalizeHost(line.replace(/^[a-z]+:\/\//i, "").split("/")[0]))
+          .filter(Boolean)
+      );
+      adultBlocklistLoaded = true;
+    } catch (error) {
+      console.error("Could not load adult blocklist:", error);
+    }
+
+    return adultBlocklistDomains;
   }
 
   /** Loads enabled domain groups, applies expired cooldowns, and rebuilds the active domain set. */
@@ -111,105 +140,82 @@
     activeDomains = domains;
   }
 
-  /** Loads plain-hostname entries from the packaged adult blocklist once. */
-  async function loadAdultBlocklist() {
-    if (adultBlocklistLoaded) return adultBlocklistDomains;
+  /** Guarantees activeDomains is populated even right after a Service Worker cold wake-up. */
+  function ensureReady() {
+    if (!readyPromise) {
+      readyPromise = refreshDomains();
+    }
+    return readyPromise;
+  }
 
+  /** Evaluates a URL against activeDomains and closes the tab if blocked. */
+  async function checkAndBlockTab(tabId, url) {
+    if (!url || tabId < 0 || !url.startsWith("http")) return;
+
+    await ensureReady();
+
+    let hostname;
     try {
-      const response = await fetch(browserApi.runtime.getURL("assets/adult-blocklist.txt"));
-      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status}`);
-
-      const text = await response.text();
-      adultBlocklistDomains = new Set(
-        text.split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
-          .map((line) => normalizeHost(line.replace(/^[a-z]+:\/\//i, "").split("/")[0]))
-          .filter(Boolean)
-      );
-      adultBlocklistLoaded = true;
-    } catch (error) {
-      console.error("Could not load adult blocklist:", error);
+      hostname = new URL(url).hostname;
+    } catch {
+      return;
     }
 
-    return adultBlocklistDomains;
+    for (const domain of activeDomains) {
+      if (matchesDomain(hostname, domain)) {
+        browserApi.tabs.remove(tabId).catch(() => {});
+        showProtectedPopup("page", hostname);
+        return;
+      }
+    }
   }
 
-  // Cancel navigation requests and close tabs whose hostname belongs to a blocked domain.
-  if (browserApi.webRequest?.onBeforeRequest) {
-    browserApi.webRequest.onBeforeRequest.addListener(
-      (details) => {
-        let hostname;
-        try {
-          hostname = new URL(details.url).hostname;
-        } catch {
-          return { cancel: false };
-        }
-
-        for (const domain of activeDomains) {
-          if (matchesDomain(hostname, domain)) {
-            //The actual canceler of the request
-            if (details.tabId >= 0) browserApi.tabs.remove(details.tabId);
-            showProtectedPopup("page", hostname);
-            return { cancel: true };
-          }
-        }
-        return { cancel: false };
-      },
-      { urls: ["<all_urls>"], types: ["main_frame", "sub_frame"] },
-      ["blocking"]
-    );
+  // Fires as soon as navigation begins (replaces blocking webRequest in Chromium MV3).
+  if (browserApi.webNavigation?.onBeforeNavigate) {
+    browserApi.webNavigation.onBeforeNavigate.addListener((details) => {
+      if (details.frameId === 0) {
+        checkAndBlockTab(details.tabId, details.url);
+      }
+    });
   }
 
-  // Fallback for cached pages / Service Workers (like Facebook) or already-open tabs.
+  // Fallback for cached pages, Service Workers, SPA history changes, or already-open tabs.
   if (browserApi.tabs?.onUpdated) {
     browserApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       const url = changeInfo.url || tab?.url;
-      if (!url) return;
-
-      let hostname;
-      try {
-        hostname = new URL(url).hostname;
-      } catch {
-        return;
-      }
-
-      for (const domain of activeDomains) {
-        if (matchesDomain(hostname, domain)) {
-          //The actual canceler of the request
-          browserApi.tabs.remove(tabId);
-          showProtectedPopup("page", hostname);
-          return;
-        }
-      }
+      if (url) checkAndBlockTab(tabId, url);
     });
   }
 
   // Handle popup setting updates and requests from content scripts to close tabs.
   browserApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "UPDATE_SETTINGS") {
-      refreshDomains();
+      readyPromise = refreshDomains();
       sendResponse?.({ ok: true });
     }
 
     if (message?.type === "CLOSE_TAB" && sender.tab?.id !== undefined) {
-      browserApi.tabs.remove(sender.tab.id);
+      browserApi.tabs.remove(sender.tab.id).catch(() => {});
       showProtectedPopup("keyword", message.reason || "");
     }
   });
 
   // Rebuild blocked domains immediately when extension storage changes.
   browserApi.storage?.onChanged?.addListener((changes, area) => {
-    if (area === "local") refreshDomains();
+    if (area === "local") {
+      readyPromise = refreshDomains();
+    }
   });
 
   // Schedule recurring cooldown checks so protection settings expire automatically.
   if (browserApi.alarms?.create) {
     browserApi.alarms.create("cruzader-cooldown-check", { periodInMinutes: 5 });
     browserApi.alarms.onAlarm?.addListener((alarm) => {
-      if (alarm.name === "cruzader-cooldown-check") refreshDomains();
+      if (alarm.name === "cruzader-cooldown-check") {
+        readyPromise = refreshDomains();
+      }
     });
   }
 
-  refreshDomains();
+  ensureReady();
 })();
