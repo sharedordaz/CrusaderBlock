@@ -12,6 +12,28 @@ if (typeof importScripts === "function") {
   let adultBlocklistLoaded = false;
   let readyPromise = null;
 
+  /** Calls a Chrome callback API or Firefox Promise API consistently. */
+  function storageGet(keys) {
+    return storage.get(keys).then((result) => result || {});
+  }
+
+  function storageSet(values) {
+    return storage.set(values);
+  }
+
+  function storageRemove(keys) {
+    return storage.remove(keys);
+  }
+
+  function removeTab(tabId) {
+    try {
+      const result = browserApi.tabs.remove(tabId);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {
+      // A tab may already be closed or unavailable.
+    }
+  }
+
   /** Removes protocol and subdomain prefixes so domains can be compared consistently. */
   function normalizeHost(hostname) {
     return String(hostname || "").trim().toLowerCase().replace(/^www\./, "");
@@ -25,14 +47,14 @@ if (typeof importScripts === "function") {
     return host === blocked || host.endsWith(`.${blocked}`);
   }
 
-  /** Reads extension settings from browser storage and resolves the callback API as a Promise. */
+  /** Reads extension settings through either Chromium callbacks or Firefox Promises. */
   async function getStoredData(keys) {
-    if (browserApi.storage?.local?.get) {
-      return new Promise((resolve) => {
-        browserApi.storage.local.get(keys, (result) => resolve(result || {}));
-      });
+    try {
+      return await storageGet(keys);
+    } catch (error) {
+      console.error("Could not read Crusader Block storage:", error);
+      return {};
     }
-    return {};
   }
 
   /** Opens a small popup window showing the protection screen. */
@@ -112,9 +134,9 @@ if (typeof importScripts === "function") {
     }
 
     if (needsSave) {
-      storage.set({ domainSettings, keywordSettings, customDomains, cooldowns }, () => {
-        if (clearPendingDomains) storage.remove("pendingCustomDomains");
-      });
+      storageSet({ domainSettings, keywordSettings, customDomains, cooldowns }).then(() => {
+        if (clearPendingDomains) storageRemove("pendingCustomDomains").catch(() => {});
+      }).catch((error) => console.error("Could not save Crusader Block settings:", error));
     }
 
     const domains = new Set();
@@ -163,7 +185,7 @@ if (typeof importScripts === "function") {
 
     for (const domain of activeDomains) {
       if (matchesDomain(hostname, domain)) {
-        browserApi.tabs.remove(tabId).catch(() => {});
+        removeTab(tabId);
         showProtectedPopup("page", hostname);
         return;
       }
@@ -195,7 +217,7 @@ if (typeof importScripts === "function") {
     }
 
     if (message?.type === "CLOSE_TAB" && sender.tab?.id !== undefined) {
-      browserApi.tabs.remove(sender.tab.id).catch(() => {});
+      removeTab(sender.tab.id);
       showProtectedPopup("keyword", message.reason || "");
     }
   });

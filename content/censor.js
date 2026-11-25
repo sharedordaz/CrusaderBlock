@@ -12,23 +12,32 @@
   let censorWords = [];
   let closeWords = [];
 
+  /** Reads storage consistently in Chromium and Firefox. */
+  function getKeywordSettings() {
+      return browserApi.storage.local.get(["keywordSettings"])
+        .then((result) => result || {});
+    }
+
   /** Escapes regular-expression characters so keyword text is matched literally. */
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   /** Loads censor and tab-closing keywords, then applies them to the current page. */
   function refreshWords() {
     if (!browserApi.storage?.local) return;
-    browserApi.storage.local.get(["keywordSettings"], (result) => {
+
+    getKeywordSettings().then((result) => {
       const settings = result.keywordSettings || {};
-      censorWords = (KEYWORDS.censor || []).filter(() => settings.censor !== false)
-        .concat(Array.isArray(settings.censorCustom) ? settings.censorCustom : []);
-      closeWords = (KEYWORDS.closeTab || []).filter(() => settings.closeTab !== false)
-        .concat(Array.isArray(settings.closeTabCustom) ? settings.closeTabCustom : []);
+      censorWords = settings.censor === false
+        ? []
+        : (KEYWORDS.censor || []).concat(Array.isArray(settings.censorCustom) ? settings.censorCustom : []);
+      closeWords = settings.closeTab === false
+        ? []
+        : (KEYWORDS.closeTab || []).concat(Array.isArray(settings.closeTabCustom) ? settings.closeTabCustom : []);
 
       if (!checkAndCloseTab()) {
         censorText(document.body);
       }
-    });
+    }).catch((error) => console.error("Could not load Crusader Block keyword settings:", error));
   }
 
   /** Reports whether a text value contains at least one configured blocked phrase. */

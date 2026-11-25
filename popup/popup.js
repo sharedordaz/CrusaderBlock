@@ -1,15 +1,37 @@
 (() => {
   const browserApi = globalThis.browser || globalThis.chrome;
-  const storage = browserApi.storage.local;
+  const popupStorage = browserApi.storage.local;
+
+  function storageGet(keys) {
+    return popupStorage.get(keys).then((result) => result || {});
+  }
+
+  function storageSet(values) {
+    return popupStorage.set(values);
+  }
+
+  function storageRemove(keys) {
+    return popupStorage.remove(keys);
+  }
+
+  function notifySettingsChanged() {
+    try {
+      const result = browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {
+      // Message delivery can fail while the background worker is waking up.
+    }
+  }
+
   const DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
   const DEBUG_COOLDOWN_MS = 10 * 1000; // 10 seconds
 
   // true = use cooldowns; false = disable cooldowns completely
   const COOLDOWN_ENABLED = true;
   // true = 10 seconds (debug); false = 24 hours (normal)
-  const DEBUG_COOLDOWN = true;
+  const DEBUG_COOLDOWN = false;
 
-  const SHUTDOWN_COOLDOWN = true; // true = dev-only: allows clearing cooldowns from popup console with resetCooldowns()
+  const SHUTDOWN_COOLDOWN = false; // Production: no console cooldown bypass.
 
   const COOLDOWN_MS = DEBUG_COOLDOWN ? DEBUG_COOLDOWN_MS : DAY_MS;
 
@@ -19,9 +41,8 @@
 
   /** Loads settings, applies any expired pending deactivations, and updates the UI. */
   function load() {
-    storage.get(
-      ["domainSettings", "cooldowns", "customDomains", "pendingCustomDomains", "keywordSettings"],
-      (saved) => {
+    storageGet(["domainSettings", "cooldowns", "customDomains", "pendingCustomDomains", "keywordSettings"])
+      .then((saved) => {
         const domainSettings = { ...(saved.domainSettings || {}) };
         const keywordSettings = { ...(saved.keywordSettings || {}) };
         let customDomains = saved.customDomains || [];
@@ -33,7 +54,7 @@
         if (!COOLDOWN_ENABLED) {
           if (Object.keys(cooldowns).length || saved.pendingCustomDomains) {
             cooldowns = {};
-            storage.remove(["cooldowns", "pendingCustomDomains"]);
+            storageRemove(["cooldowns", "pendingCustomDomains"]).catch(() => {});
           }
         } else {
           for (const id of Object.keys(cooldowns)) {
@@ -53,10 +74,10 @@
           }
 
           if (needsSave) {
-            storage.set({ domainSettings, keywordSettings, customDomains, cooldowns }, () => {
-              if (clearPendingDomains) storage.remove("pendingCustomDomains");
-              browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
-            });
+            storageSet({ domainSettings, keywordSettings, customDomains, cooldowns }).then(() => {
+              if (clearPendingDomains) storageRemove("pendingCustomDomains").catch(() => {});
+              notifySettingsChanged();
+            }).catch(() => {});
           }
         }
 
@@ -71,19 +92,17 @@
         }
 
         const customDomainsEl = document.getElementById("customDomains");
-        if (document.activeElement !== customDomainsEl) {
-          customDomainsEl.value = customDomains.join("\n");
-        }
+        if (document.activeElement !== customDomainsEl) customDomainsEl.value = customDomains.join("\n");
         customDomainsEl.disabled = COOLDOWN_ENABLED && (cooldowns.customDomains || 0) > now;
 
         updateCountdown(cooldowns);
-      }
-    );
+      })
+      .catch((error) => console.error("Could not load Crusader Block popup settings:", error));
   }
 
   /** Saves added custom domains immediately; delays removals until after cooldown. */
   function saveCustomDomains() {
-    storage.get(["customDomains", "cooldowns"], (saved) => {
+    storageGet(["customDomains", "cooldowns"]).then((saved) => {
       const cooldowns = { ...(saved.cooldowns || {}) };
       if (COOLDOWN_ENABLED && (cooldowns.customDomains || 0) > Date.now()) return;
 
@@ -98,28 +117,25 @@
         .filter((value, index, array) => array.indexOf(value) === index);
 
       if (JSON.stringify(nextDomains) === JSON.stringify(prevDomains)) return;
-
       const removedAny = prevDomains.some((domain) => !nextDomains.includes(domain));
 
       if (removedAny && COOLDOWN_ENABLED) {
-        // Queue the removal and keep the old list active until cooldown expires
         cooldowns.customDomains = Date.now() + COOLDOWN_MS;
-        storage.set({ pendingCustomDomains: nextDomains, cooldowns }, load);
+        storageSet({ pendingCustomDomains: nextDomains, cooldowns }).then(load).catch(() => {});
       } else {
-        // Adding domains (or cooldown disabled): apply immediately
-        storage.set({ customDomains: nextDomains }, () => {
-          browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+        storageSet({ customDomains: nextDomains }).then(() => {
+          notifySettingsChanged();
           load();
-        });
+        }).catch(() => {});
       }
-    });
+    }).catch((error) => console.error("Could not save custom domains:", error));
   }
 
   /** Activates immediately; queues deactivations until after the cooldown expires. */
   function setSetting(id, enabled) {
     const cfg = CONTROLS[id];
 
-    storage.get([cfg.group, "cooldowns"], (saved) => {
+    storageGet([cfg.group, "cooldowns"]).then((saved) => {
       const cooldowns = { ...(saved.cooldowns || {}) };
       if (COOLDOWN_ENABLED && (cooldowns[id] || 0) > Date.now()) return;
 
@@ -129,16 +145,16 @@
         groupData[cfg.key] = enabled;
         delete cooldowns[id];
 
-        storage.set({ [cfg.group]: groupData, cooldowns }, () => {
-          browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+        storageSet({ [cfg.group]: groupData, cooldowns }).then(() => {
+          notifySettingsChanged();
           load();
-        });
+        }).catch(() => {});
       } else {
         // Deactivating: keep it enabled and start the cooldown first
         cooldowns[id] = Date.now() + COOLDOWN_MS;
-        storage.set({ cooldowns }, load);
+        storageSet({ cooldowns }).then(load).catch(() => {});
       }
-    });
+    }).catch((error) => console.error("Could not update Crusader Block settings:", error));
   }
 
   /** Finds the earliest cooldown and displays its remaining time. */
@@ -175,11 +191,11 @@
   // Dev-only: lets you run resetCooldowns() from the popup console
   if (SHUTDOWN_COOLDOWN) {
     globalThis.resetCooldowns = () => {
-      storage.remove(["cooldowns", "pendingCustomDomains"], () => {
-        browserApi.runtime.sendMessage({ type: "UPDATE_SETTINGS" });
+      storageRemove(["cooldowns", "pendingCustomDomains"]).then(() => {
+        notifySettingsChanged();
         load();
         console.log("Cooldowns cleared!");
-      });
+      }).catch(() => {});
     };
   }
 
