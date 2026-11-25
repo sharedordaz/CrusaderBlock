@@ -26,12 +26,15 @@
   const DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
   const DEBUG_COOLDOWN_MS = 10 * 1000; // 10 seconds
 
-  // true = use cooldowns; false = disable cooldowns completely
-  const COOLDOWN_ENABLED = true;
-  // true = 10 seconds (debug); false = 24 hours (normal)
-  const DEBUG_COOLDOWN = false;
+  let DEBUG_MODE = true; // Set to false for production builds
 
-  const SHUTDOWN_COOLDOWN = false; // Production: no console cooldown bypass.
+  // true = use cooldowns; false = disable cooldowns completely
+  const COOLDOWN_ENABLED = true // Production: true
+  // true = 10 seconds (debug); false = 24 hours (normal)
+  const DEBUG_COOLDOWN = DEBUG_MODE ? true : false; // Production: false
+
+  const SHUTDOWN_COOLDOWN = DEBUG_MODE ? true : false; // Use the function resetCooldowns() in the popup console to clear cooldowns
+
 
   const COOLDOWN_MS = DEBUG_COOLDOWN ? DEBUG_COOLDOWN_MS : DAY_MS;
 

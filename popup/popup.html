@@ -1,54 +1,68 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cruzader Block</title>
+  <title data-i18n="pageTitle">Cruzader Block</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main class="panel">
+    <!-- Selector de idioma -->
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+      <select id="languageSelect" data-i18n-aria="languageSelectAria" aria-label="Seleccionar idioma">
+        <option value="es">Español</option>
+        <option value="en" selected>English</option>
+        <option value="pt">Português</option>
+        <option value="zh">中文 (Chino)</option>
+        <option value="ru">Русский (Ruso)</option>
+      </select>
+    </div>
+
     <img class="banner" src="../assets/banner.png" alt="Cruzader Block">
 
     <section class="status" aria-live="polite">
-      <strong id="statusText">Protection settings</strong>
+      <strong id="statusText" data-i18n="statusText">Protection settings</strong>
       <span id="unlockText"></span>
     </section>
 
     <div class="options">
-      <label class="option"><span>Social networks</span><input type="checkbox" id="social"></label>
-      <label class="option"><span>YouTube</span><input type="checkbox" id="youtube"></label>
-      <label class="option"><span>Gambling</span><input type="checkbox" id="gambling"></label>
-      <label class="option"><span>Adult content</span><input type="checkbox" id="adult"></label>
-      <label class="option"><span>Video platforms</span><input type="checkbox" id="videoPlatforms"></label>
-      <label class="option"><span>Streaming platforms</span><input type="checkbox" id="streamingPlatforms"></label>
-      <label class="option"><span>Keyword censor</span><input type="checkbox" id="keywordCensor"></label>
-      <label class="option"><span>Close blocked tabs</span><input type="checkbox" id="closeTabs"></label>
+      <label class="option"><span data-i18n="social">Social networks</span><input type="checkbox" id="social"></label>
+      <label class="option"><span data-i18n="youtube">YouTube</span><input type="checkbox" id="youtube"></label>
+      <label class="option"><span data-i18n="gambling">Gambling</span><input type="checkbox" id="gambling"></label>
+      <label class="option"><span data-i18n="adult">Adult content</span><input type="checkbox" id="adult"></label>
+      <label class="option"><span data-i18n="videoPlatforms">Video platforms</span><input type="checkbox" id="videoPlatforms"></label>
+      <label class="option"><span data-i18n="streamingPlatforms">Streaming platforms</span><input type="checkbox" id="streamingPlatforms"></label>
+      <label class="option"><span data-i18n="keywordCensor">Keyword censor</span><input type="checkbox" id="keywordCensor"></label>
+      <label class="option"><span data-i18n="closeTabs">Close blocked tabs</span><input type="checkbox" id="closeTabs"></label>
     </div>
 
     <details>
-      <summary>Custom domains</summary>
+      <summary data-i18n="customDomainsSummary">Custom domains</summary>
       <textarea id="customDomains" rows="3"
+                data-i18n-aria="customDomainsAria"
+                data-i18n-placeholder="customDomainsPlaceholder"
                 aria-label="Custom domains, one per line"
                 placeholder="example.com&#10;another.example"></textarea>
       <label class="option custom-enable">
-        <span>Block custom domains</span>
+        <span data-i18n="blockCustom">Block custom domains</span>
         <input type="checkbox" id="custom">
       </label>
     </details>
 
-    <p class="note">Turning protection off starts a 24-hour cooldown.</p>
+    <p class="note" data-i18n="note">Turning protection off starts a 24-hour cooldown.</p>
 
     <footer class="donate-footer">
-  <a href="https://ko-fi.com/shared11" target="_blank" rel="noopener noreferrer">
-    ☕ Apoya el desarrollo de CrusaderBlock
-  </a>
-</footer>
+      <a href="https://ko-fi.com/shared11" target="_blank" rel="noopener noreferrer" data-i18n="donate">
+        ☕ Apoya el desarrollo de CrusaderBlock
+      </a>
+    </footer>
   </main>
 
   <script src="../lists/domains.js" defer></script>
   <script src="../lists/keywords.js" defer></script>
   <script src="../lists/controls.js" defer></script>
   <script src="popup.js" defer></script>
+  <script src="translator.js" defer></script>
 </body>
 </html>
