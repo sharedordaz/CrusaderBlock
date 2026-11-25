@@ -10,6 +10,8 @@ if (typeof importScripts === "function") {
   let lastPopupTime = 0;
   let adultBlocklistDomains = new Set();
   let adultBlocklistLoaded = false;
+  let gamblingBlocklistDomains = new Set();
+  let gamblingBlocklistLoaded = false;
   let readyPromise = null;
 
   /** Calls a Chrome callback API or Firefox Promise API consistently. */
@@ -74,31 +76,34 @@ if (typeof importScripts === "function") {
     }
   }
 
-  /** Loads plain-hostname entries from the packaged adult blocklist once. */
+  /** Parses plain-host and hosts-file blocklist formats into valid domains. */
+  function parseBlocklist(text) {
+    return new Set(text.split(/\r?\n/)
+      .map((line) => line.trim().replace(/\s+#.*$/, ""))
+      .filter((line) => line && !line.startsWith("#"))
+      .flatMap((line) => {
+        const parts = line.trim().split(/\s+/);
+        const candidate = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+        if (!candidate || candidate === "0.0.0.0" || candidate === "127.0.0.1") return [];
+        return [normalizeHost(candidate
+          .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+          .split("/")[0]
+          .split(":")[0])];
+      })
+      .filter((domain) => domain && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain)));
+  }
+
+  /** Loads the packaged adult blocklist once. */
   async function loadAdultBlocklist() {
     if (adultBlocklistLoaded) return adultBlocklistDomains;
 
     try {
       const blocklistUrl = browserApi.runtime.getURL("assets/adult-blocklist.txt");
       const response = await fetch(blocklistUrl, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Blocklist request failed: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status} ${response.statusText}`);
 
-      const text = await response.text();
-      const domains = text.split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
-        .map((line) => normalizeHost(line
-          .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
-          .split("/")[0]
-          .split(":")[0]))
-        .filter((domain) => domain && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain));
-
-      adultBlocklistDomains = new Set(domains);
-      if (!adultBlocklistDomains.size) {
-        throw new Error("Blocklist contained no valid domains");
-      }
+      adultBlocklistDomains = parseBlocklist(await response.text());
+      if (!adultBlocklistDomains.size) throw new Error("Adult blocklist contained no valid domains");
 
       adultBlocklistLoaded = true;
       console.info(`Crusader Block: loaded ${adultBlocklistDomains.size} adult domains`);
@@ -107,6 +112,27 @@ if (typeof importScripts === "function") {
     }
 
     return adultBlocklistDomains;
+  }
+
+  /** Loads the packaged gambling blocklist once. */
+  async function loadGamblingBlocklist() {
+    if (gamblingBlocklistLoaded) return gamblingBlocklistDomains;
+
+    try {
+      const blocklistUrl = browserApi.runtime.getURL("assets/gambling-blocklist.txt");
+      const response = await fetch(blocklistUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status} ${response.statusText}`);
+
+      gamblingBlocklistDomains = parseBlocklist(await response.text());
+      if (!gamblingBlocklistDomains.size) throw new Error("Gambling blocklist contained no valid domains");
+
+      gamblingBlocklistLoaded = true;
+      console.info(`Crusader Block: loaded ${gamblingBlocklistDomains.size} gambling domains`);
+    } catch (error) {
+      console.error("Could not load gambling blocklist:", error);
+    }
+
+    return gamblingBlocklistDomains;
   }
 
   /** Loads enabled domain groups, applies expired cooldowns, and rebuilds the active domain set. */
@@ -152,7 +178,7 @@ if (typeof importScripts === "function") {
 
     const domains = new Set();
     for (const key of Object.keys(DOMAIN_GROUPS)) {
-      if (key !== "custom" && domainSettings[key]) {
+      if (key !== "custom" && key !== "gambling" && domainSettings[key]) {
         for (const domain of DOMAIN_GROUPS[key] || []) {
           domains.add(normalizeHost(domain));
         }
@@ -162,6 +188,11 @@ if (typeof importScripts === "function") {
     if (domainSettings.adult) {
       const adultDomains = await loadAdultBlocklist();
       for (const domain of adultDomains) domains.add(domain);
+    }
+
+    if (domainSettings.gambling) {
+      const gamblingDomains = await loadGamblingBlocklist();
+      for (const domain of gamblingDomains) domains.add(domain);
     }
 
     if (domainSettings.custom) {
