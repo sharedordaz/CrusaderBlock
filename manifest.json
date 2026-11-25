@@ -18,7 +18,12 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background/background.js"
+    "service_worker": "background/background.js",
+    "scripts": [
+      "lists/domains.js",
+      "lists/keywords.js",
+      "background/background.js"
+    ]
   },
   "content_scripts": [
     {
