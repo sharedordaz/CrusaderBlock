@@ -79,18 +79,29 @@ if (typeof importScripts === "function") {
     if (adultBlocklistLoaded) return adultBlocklistDomains;
 
     try {
-      const response = await fetch(browserApi.runtime.getURL("assets/adult-blocklist.txt"));
-      if (!response.ok) throw new Error(`Blocklist request failed: ${response.status}`);
+      const blocklistUrl = browserApi.runtime.getURL("assets/adult-blocklist.txt");
+      const response = await fetch(blocklistUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Blocklist request failed: ${response.status} ${response.statusText}`);
+      }
 
       const text = await response.text();
-      adultBlocklistDomains = new Set(
-        text.split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
-          .map((line) => normalizeHost(line.replace(/^[a-z]+:\/\//i, "").split("/")[0]))
-          .filter(Boolean)
-      );
+      const domains = text.split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && !line.includes(" "))
+        .map((line) => normalizeHost(line
+          .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+          .split("/")[0]
+          .split(":")[0]))
+        .filter((domain) => domain && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain));
+
+      adultBlocklistDomains = new Set(domains);
+      if (!adultBlocklistDomains.size) {
+        throw new Error("Blocklist contained no valid domains");
+      }
+
       adultBlocklistLoaded = true;
+      console.info(`Crusader Block: loaded ${adultBlocklistDomains.size} adult domains`);
     } catch (error) {
       console.error("Could not load adult blocklist:", error);
     }
@@ -108,7 +119,7 @@ if (typeof importScripts === "function") {
       "pendingCustomDomains"
     ]);
 
-    const domainSettings = { ...(saved.domainSettings || {}) };
+    const domainSettings = { adult: true, ...(saved.domainSettings || {}) };
     const keywordSettings = { ...(saved.keywordSettings || {}) };
     let customDomains = saved.customDomains || [];
     const cooldowns = { ...(saved.cooldowns || {}) };
